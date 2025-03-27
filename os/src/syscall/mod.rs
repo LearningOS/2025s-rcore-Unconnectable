@@ -27,9 +27,27 @@ mod process;
 use fs::*;
 use process::*;
 
+use crate::task::TASK_MANAGER;
+/// const for 
+pub const SYSCALL_RESET_COUNTS: usize = 999;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+    TASK_MANAGER.add_syscall_count(syscall_id); // 更新计数
+    //static mut WRITE_COUNT: usize = 0; // 静态变量记录 SYSCALL_WRITE 调用次数
+    /*if syscall_id == SYSCALL_EXIT { // 只检查 SYSCALL_WRITE
+        unsafe {
+            WRITE_COUNT += 1;
+            println!(
+                "\x1b[31mSYSCALL_WRITE (id: 64) called #{}, args: {:?}\x1b[0m",
+                WRITE_COUNT, args
+            );
+        }
+    }*/
     match syscall_id {
+        SYSCALL_RESET_COUNTS => {
+            TASK_MANAGER.reset_syscall_counts();
+            0
+        }
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
         SYSCALL_YIELD => sys_yield(),

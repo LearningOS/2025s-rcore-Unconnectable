@@ -14,12 +14,13 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+const MAX_SYSCALL_NUM: usize = 512;
 use crate::config::MAX_APP_NUM;
-use crate::loader::{get_num_app, init_app_cx};
+use crate::loader::{ get_num_app, init_app_cx };
 use crate::sync::UPSafeCell;
 use lazy_static::*;
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{ TaskControlBlock, TaskStatus };
 
 pub use context::TaskContext;
 
@@ -45,16 +46,20 @@ pub struct TaskManagerInner {
     tasks: [TaskControlBlock; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+    syscall_counts: [usize; MAX_SYSCALL_NUM],
 }
 
 lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-        }; MAX_APP_NUM];
+        let mut tasks = [
+            TaskControlBlock {
+                task_cx: TaskContext::zero_init(),
+                task_status: TaskStatus::UnInit,
+            };
+            MAX_APP_NUM
+        ];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
@@ -65,6 +70,7 @@ lazy_static! {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    syscall_counts: [0; MAX_SYSCALL_NUM],
                 })
             },
         }
@@ -89,14 +95,35 @@ impl TaskManager {
         }
         panic!("unreachable in run_first_task!");
     }
-
+    /// reset all sys_counts to 0
+    pub fn reset_syscall_counts(&self) {
+        let mut inner = self.inner.exclusive_access();
+        inner.syscall_counts = [0; MAX_SYSCALL_NUM];
+    }
     /// Change the status of current `Running` task into `Ready`.
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Ready;
     }
-
+    /// when count syscall it will add
+    pub fn add_syscall_count(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        if syscall_id < MAX_SYSCALL_NUM {
+            inner.syscall_counts[syscall_id] += 1;
+        }
+    }
+    /// os/src/syscall/processer.rs 's sys_trace will call this func
+    pub fn get_syscall_id(&self, syscall_id: usize) -> isize {
+        let inner = self.inner.exclusive_access();
+        inner.syscall_counts[syscall_id] as isize
+        /* 
+        if syscall_id < MAX_SYSCALL_NUM {
+            inner.syscall_counts[syscall_id] as isize
+        } else {
+            -1
+        }*/
+    }
     /// Change the status of current `Running` task into `Exited`.
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();

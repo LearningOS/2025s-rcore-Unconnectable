@@ -1,6 +1,6 @@
 //! Process management syscalls
 use crate::{
-    task::{exit_current_and_run_next, suspend_current_and_run_next},
+    task::{ exit_current_and_run_next, suspend_current_and_run_next, TASK_MANAGER },
     timer::get_time_us,
 };
 
@@ -41,5 +41,19 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 // TODO: implement the syscall
 pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     trace!("kernel: sys_trace");
-    -1
+    //-1
+    if _trace_request == 0 {
+        let value = unsafe { *(_id as *const u8) }; // 读取一个字节
+        value as isize
+    } else if _trace_request == 1 {
+        let ptr = _id as *mut usize;
+        unsafe {
+            *ptr = _data;
+        }
+        return 0;
+    } else if _trace_request == 2 {
+        return TASK_MANAGER.get_syscall_id(_id);
+    } else {
+        return -1;
+    }
 }
