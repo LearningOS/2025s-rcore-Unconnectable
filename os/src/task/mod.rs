@@ -14,7 +14,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-const MAX_SYSCALL_NUM: usize = 512;
+const MAX_SYSCALL_NUM: usize = 500;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{ get_num_app, init_app_cx };
 use crate::sync::UPSafeCell;
