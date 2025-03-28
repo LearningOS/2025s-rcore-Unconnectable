@@ -108,4 +108,3 @@ jobs:
             echo "Error: The result field does not contain 1."
             exit 1
             fi
-
