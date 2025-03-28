@@ -31,22 +31,29 @@ BASE ?= 1
 DISASM ?= -x
 
 build: env $(KERNEL_BIN)
-
+	@echo "Build target: $(TARGET)"
+	@echo "Build mode: $(MODE)"
+	@echo "Kernel ELF: $(KERNEL_ELF)"
+	@echo "Kernel BIN: $(KERNEL_BIN)"
 env:
 ifeq ($(OFFLINE),)
+	@echo "Checking and installing Rust target and components..."
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
 	cargo install cargo-binutils
 	rustup component add rust-src
 	rustup component add llvm-tools-preview
+	@echo "Rust environment setup completed."
 endif
 
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 kernel:
+	@echo "Building user applications..."
 	@make -C ../user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
 	@echo Platform: $(BOARD)
 	@cargo build $(MODE_ARG)
+	@echo "Kernel build completed."
 
 clean:
 	@cargo clean
