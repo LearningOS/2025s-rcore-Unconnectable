@@ -14,13 +14,14 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::loader::{get_app_data, get_num_app};
+use crate::loader::{ get_app_data, get_num_app };
+use crate::mm::{ MapPermission, PageTable, VirtAddr };
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{ TaskControlBlock, TaskStatus };
 
 pub use context::TaskContext;
 
@@ -87,6 +88,24 @@ impl TaskManager {
             __switch(&mut _unused as *mut _, next_task_cx_ptr);
         }
         panic!("unreachable in run_first_task!");
+    }
+
+    /// count syscall fuc🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
+    pub fn count_syscall(&self, syscall_id: usize) {
+        let mut inner = TASK_MANAGER.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].syscall_times[syscall_id] += 1;
+
+        //let mut inner = self.inner.exclusive_access();
+        //let current = inner.current_task;
+        //inner.tasks[current].syscall_counts[syscall_id] += 1;
+    }
+    ///🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
+    /// Get the syscall times of the current 'Running' task 🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
+    pub fn get_syscall_times(&self, syscall_id: usize) -> isize {
+        let inner = TASK_MANAGER.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id] as isize
     }
 
     /// Change the status of current `Running` task into `Ready`.
@@ -189,6 +208,7 @@ pub fn exit_current_and_run_next() {
 }
 
 /// Get the current 'Running' task's token.
+/// 返回token
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
 }
@@ -201,4 +221,155 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// mmap syscall
+pub fn mmap(_start: usize, _len: usize, _port: usize) -> isize {
+    debug!(
+        "x1b[31m start syscall mmap begins\nstart={:#x},_len={:#x} _port={:#x} \x1b[0m",
+        _start,
+        _len,
+        _port
+    );
+    let _start_va: VirtAddr = _start.into();
+    if !_start_va.aligned() {
+        return -1;
+    }
+    if (_port & !0x7) != 0 || (_port & 0x7) == 0 {
+        return -1;
+    }
+
+    let _end_va: VirtAddr = match _start.checked_add(_len) {
+        Some(val) => VirtAddr(val),
+        _ => {
+            return -1;
+        }
+    };
+    let _start_vpn = _start_va.floor();
+    let _end_vpn = _end_va.ceil();
+
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let cur = inner.current_task;
+    if inner.tasks[cur].memory_set.is_overlap(_start_vpn, _end_vpn) {
+        debug!("x1b[31m mmap is overlap\n\x1b[0m");
+        return -1;
+    }
+    inner.tasks[cur].memory_set.mmap(
+        _start_vpn,
+        _end_vpn,
+        MapPermission::from_bits_truncate((_port as u8) << 1) | MapPermission::U
+    );
+    return 0;
+}
+
+/// munmap syscall
+pub fn munmap(start: usize, len: usize) -> isize {
+    debug!("kernel: munmap: start = {:#x}, len = {:#x}", start, len);
+    let start_va: VirtAddr = start.into();
+    if !start_va.aligned() {
+        return -1;
+    }
+    let start_vpn = start_va.floor();
+    let end_va: VirtAddr = (start + len).into();
+    let end_vpn = end_va.ceil();
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let cur = inner.current_task;
+    debug!("kernel: munmap: start_vpn = {:?}, end_vpn = {:?}", start_vpn, end_vpn);
+    return match inner.tasks[cur].memory_set.munmap(start_vpn, end_vpn) {
+        Ok(_) => 0,
+        Err(_) => -1,
+    };
+}
+
+/// systrace
+pub fn task_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
+    trace!("kernel: sys_trace");
+    // 获取当前任务的用户态token
+    let token = current_user_token(); //satp 寄存器的值，包含页表物理地址和模式信息
+    let _page_table = PageTable::from_token(token); //临时PageTable
+    //trace(_trace_request,_id,_data);
+    match _trace_request {
+        // 读取操作 - 读取1字节内存
+        0 => {
+            let is_valid_id = |id: usize, len: usize| -> bool {
+                const ADD_MAX: usize = 0x8000_0000;
+                const PAGE_SIZE: usize = 4096; //4KB
+                //end = id + len ,end是在增加之后的实际页码,但是是左闭右开区间[start,end)
+                //所以下面需要 -1
+                let end = match id.checked_add(len) {
+                    Some(val) => val,
+                    _ => {
+                        return false;
+                    }
+                };
+                if end > ADD_MAX {
+                    return false;
+                }
+                if len > PAGE_SIZE {
+                    let strat_page = id / PAGE_SIZE;
+                    let end_page = (end - 1) / PAGE_SIZE;
+                    if strat_page != end_page {
+                        return false;
+                    }
+                }
+                true
+            };
+            //以下是判断代码
+            let _vpn = VirtAddr::from(_id).floor();
+            if !is_valid_id(_id, 1) {
+                return -1;
+            }
+            let vpn = VirtAddr::from(_id).floor();
+
+            // 检查页表项是否存在且可读 Read仅仅需要readable
+            if let Some(pte) = _page_table.translate(vpn) {
+                if !pte.is_valid() || !pte.readable() {
+                    return -1;
+                }
+
+                // 安全读取字节
+                let ppn = pte.ppn();
+                let offset = VirtAddr::from(_id).page_offset();
+                let byte = ppn.get_bytes_array()[offset];
+                byte as isize
+            } else {
+                -1
+            }
+        }
+
+        // 写入操作 - 写入usize数据
+        1 => {
+            let vpn = VirtAddr::from(_id).floor();
+
+            // 检查页表项是否存在且可写
+            if let Some(pte) = _page_table.translate(vpn) {
+                if !pte.is_valid() || !pte.writable() || !pte.readable() {
+                    return -1;
+                }
+
+                // 检查是否跨页
+                let start = _id;
+                let end = _id + core::mem::size_of::<usize>();
+                if VirtAddr::from(start).floor() != VirtAddr::from(end - 1).floor() {
+                    return -1; // 不支持跨页写入
+                }
+
+                // 安全写入
+                let ppn = pte.ppn();
+                let offset = VirtAddr::from(_id).page_offset();
+                let bytes = _data.to_ne_bytes();
+                ppn.get_bytes_array()[
+                    offset..offset + core::mem::size_of::<usize>()
+                ].copy_from_slice(&bytes);
+                0
+            } else {
+                -1
+            }
+        }
+        2 => {
+            return TASK_MANAGER.get_syscall_times(_id);
+        }
+        // 无效请求
+        _ => -1,
+    }
 }
