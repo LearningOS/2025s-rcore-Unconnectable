@@ -42,6 +42,26 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     trace!("kernel: sys_trace");
     //-1
+    match _trace_request{
+        0 =>{
+            let value = unsafe { *(_id as *const u8) as isize }; // 安全读取
+            value as isize
+        }
+        1=>{
+            let ptr = _id as *mut usize;
+            unsafe {
+                *ptr = _data;
+            }
+            0
+        }
+        2=>{
+            return TASK_MANAGER.get_syscall_id(_id);
+        }
+        _ =>{
+            -1
+        }
+    }
+    /* 
     if _trace_request == 0 {
         let value = unsafe { *(_id as *const u8) }; // 读取一个字节
         value as isize
@@ -56,4 +76,5 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     } else {
         return -1;
     }
+    */
 }
