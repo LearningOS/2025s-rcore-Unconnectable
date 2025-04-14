@@ -55,6 +55,7 @@ lazy_static! {
 #[allow(unused)]
 ///get app data from name
 pub fn get_app_data_by_name(name: &str) -> Option<&'static [u8]> {
+    // 三查找获得应用的 ELF 数据
     let num_app = get_num_app();
     (0..num_app)
         .find(|&i| APP_NAMES[i] == name)
@@ -62,6 +63,7 @@ pub fn get_app_data_by_name(name: &str) -> Option<&'static [u8]> {
 }
 ///list all apps
 pub fn list_apps() {
+    // 打印出所有可用应用的名字
     println!("/**** APPS ****");
     for app in APP_NAMES.iter() {
         println!("{}", app);
