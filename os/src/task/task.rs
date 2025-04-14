@@ -38,7 +38,7 @@ impl TaskControlBlock {
 
 pub struct TaskControlBlockInner {
     /// The physical page number of the frame where the trap context is placed
-    pub trap_cx_ppn: PhysPageNum,
+    pub trap_cx_ppn: PhysPageNum, //应用地址空间中的 Trap 上下文被放在的物理页帧的物理页号
 
     /// Application data can only appear in areas
     /// where the application address space is lower than base_size
@@ -73,6 +73,7 @@ pub struct TaskControlBlockInner {
 impl TaskControlBlockInner {
     /// get the trap context
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
+        //返回 陷阱上下文(TrapContext)的可变引用
         self.trap_cx_ppn.get_mut()
     }
     /// get the user token
@@ -83,6 +84,7 @@ impl TaskControlBlockInner {
         self.task_status
     }
     pub fn is_zombie(&self) -> bool {
+        // 检查当前任务是否是 僵尸状态
         self.get_status() == TaskStatus::Zombie
     }
 }
