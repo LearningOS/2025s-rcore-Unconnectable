@@ -38,18 +38,18 @@ pub use processor::{
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be an application running.
-    let task = take_current_task().unwrap();
+    let task = take_current_task().unwrap(); //取出当前任务
 
     // ---- access current TCB exclusively
     let mut task_inner = task.inner_exclusive_access();
-    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
-    // Change status to Ready
+    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;  
+    // Change status to Ready 修改状态为ready
     task_inner.task_status = TaskStatus::Ready;
     drop(task_inner);
     // ---- release current PCB
 
     // push back to ready queue.
-    add_task(task);
+    add_task(task); //加入队列
     // jump to scheduling cycle
     schedule(task_cx_ptr);
 }
@@ -107,11 +107,14 @@ lazy_static! {
     /// the name "initproc" may be changed to any other app name like "usertests",
     /// but we have user_shell, so we don't need to change it.
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new(TaskControlBlock::new(
+        //get_app_data_by_name("initproc").unwrap()
+        //初始化 name initproc
         get_app_data_by_name("ch5b_initproc").unwrap()
     ));
 }
 
 ///Add init process to the manager
 pub fn add_initproc() {
+    //增加 task
     add_task(INITPROC.clone());
 }

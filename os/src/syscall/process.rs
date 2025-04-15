@@ -39,13 +39,13 @@ pub fn sys_getpid() -> isize {
 pub fn sys_fork() -> isize {
     trace!("kernel:pid[{}] sys_fork", current_task().unwrap().pid.0);
     let current_task = current_task().unwrap();
-    let new_task = current_task.fork();
-    let new_pid = new_task.pid.0;
+    let new_task = current_task.fork(); //复制任务 包括子空间
+    let new_pid = new_task.pid.0; //子进程pid
     // modify trap context of new_task, because it returns immediately after switching
     let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
     // we do not have to move to next instruction since we have done it before
     // for child process, fork returns 0
-    trap_cx.x[10] = 0;
+    trap_cx.x[10] = 0; // 子进程的返回值设为 0（a0 寄存器）
     // add new task to scheduler
     add_task(new_task);
     new_pid as isize
@@ -54,7 +54,7 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_exec", current_task().unwrap().pid.0);
     let token = current_user_token();
-    let path = translated_str(token, path);
+    let path = translated_str(token, path); //translated_str 找到要执行的应用名
     if let Some(data) = get_app_data_by_name(path.as_str()) {
         let task = current_task().unwrap();
         task.exec(data);

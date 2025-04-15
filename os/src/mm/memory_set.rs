@@ -234,18 +234,20 @@ impl MemorySet {
         )
     }
     /// Create a new address space by copy code&data from a exited process's address space.
+    /// 复制已经有的用户地址空间 物理内存独立但内容相同
     pub fn from_existed_user(user_space: &Self) -> Self {
-        let mut memory_set = Self::new_bare();
+        let mut memory_set = Self::new_bare();//创建新的地址空间
         // map trampoline
-        memory_set.map_trampoline();
+        memory_set.map_trampoline(); //映射跳板页
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);
-            memory_set.push(new_area, None);
+            memory_set.push(new_area, None); // 插入新地址空间（分配物理页）
             // copy data from another space
+            // 逐页复制数据
             for vpn in area.vpn_range {
-                let src_ppn = user_space.translate(vpn).unwrap().ppn();
-                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();  //原来的物理页面
+                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();  // 新物理页
                 dst_ppn
                     .get_bytes_array()
                     .copy_from_slice(src_ppn.get_bytes_array());
@@ -325,9 +327,13 @@ impl MapArea {
             map_perm,
         }
     }
+    //复制一个逻辑段
     pub fn from_another(another: &Self) -> Self {
         Self {
-            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            vpn_range: VPNRange::new(
+                another.vpn_range.get_start(),
+                 another.vpn_range.get_end()
+            ),
             data_frames: BTreeMap::new(),
             map_type: another.map_type,
             map_perm: another.map_perm,
