@@ -74,13 +74,14 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // **** access current TCB exclusively
     let mut inner = task.inner_exclusive_access();
     // Change status to Zombie
-    inner.task_status = TaskStatus::Zombie;
-    // Record exit code
+    inner.task_status = TaskStatus::Zombie; //进程控制块中的状态修改为 僵尸进程 TaskStatus::Zombie 
+    // Record exit code 传入inner 的exit_code
     inner.exit_code = exit_code;
     // do not move to its parent but under initproc
 
     // ++++++ access initproc TCB exclusively
     {
+        //吧所有的子进程挂在 initproc_inner下面  也就是子进程的父进程是init_proc init_proc的子进程是他们
         let mut initproc_inner = INITPROC.inner_exclusive_access();
         for child in inner.children.iter() {
             child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));
@@ -89,14 +90,15 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     }
     // ++++++ release parent PCB
 
-    inner.children.clear();
+    inner.children.clear(); //当前进程的孩子向量清空。
     // deallocate user space
-    inner.memory_set.recycle_data_pages();
+    inner.memory_set.recycle_data_pages();//前进程占用的资源进行早期回收 清空逻辑段area
     drop(inner);
     // **** release current PCB
     // drop task manually to maintain rc correctly
     drop(task);
     // we do not have to save task context
+    // 因为不会回到该进程 调用schedule触发调度和任务切换
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);
 }

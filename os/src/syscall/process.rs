@@ -73,6 +73,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 
     // ---- access current PCB exclusively
     let mut inner = task.inner_exclusive_access();
+    //检查是否存在子进程    
     if !inner
         .children
         .iter()
@@ -81,19 +82,22 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         return -1;
         // ---- release current PCB
     }
+    //获取 zombie 僵尸进程的pid
     let pair = inner.children.iter().enumerate().find(|(_, p)| {
         // ++++ temporarily access child PCB exclusively
         p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
         // ++++ release child PCB
     });
     if let Some((idx, _)) = pair {
+        //把僵尸进程从 child删掉
         let child = inner.children.remove(idx);
         // confirm that child will be deallocated after being removed from children list
-        assert_eq!(Arc::strong_count(&child), 1);
+        assert_eq!(Arc::strong_count(&child), 1); // 确保子进程资源会被回收。
         let found_pid = child.getpid();
         // ++++ temporarily access child PCB exclusively
         let exit_code = child.inner_exclusive_access().exit_code;
         // ++++ release child PCB
+        // exit_code 写入用户空间的 exit_code_ptr
         *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
         found_pid as isize
     } else {
