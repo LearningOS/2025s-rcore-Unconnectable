@@ -1,9 +1,9 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
-
 use super::{ frame_alloc, FrameTracker };
 use super::{ PTEFlags, PageTable, PageTableEntry };
 use super::{ PhysAddr, PhysPageNum, VirtAddr, VirtPageNum };
 use super::{ StepByOne, VPNRange };
+#[allow(unused_imports)]
 use crate::config::{
     KERNEL_STACK_SIZE,
     MEMORY_END,
@@ -321,24 +321,23 @@ impl MemorySet {
         self.areas.push(area);
     }
     /// 查找并取消map
-    pub fn munmap(&mut self, _start: VirtPageNum, _end: VirtPageNum) -> Result<(), ()> {
-        {
-            self.areas
-                .iter_mut()
-                .enumerate()
-                .find_map(|(i, area)| {
-                    if area.vpn_range.get_start() == _start && area.vpn_range.get_end() == _end {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .map(|i| {
-                    self.areas[i].unmap(&mut self.page_table);
-                    self.areas.remove(i);
-                })
-                .ok_or(())
-        }
+    pub fn munmap(&mut self, start_vpn: VirtPageNum, end_vpn: VirtPageNum) -> isize {
+        self.areas
+            .iter_mut()
+            .enumerate()
+            .find_map(|(i, area)| {
+                if area.vpn_range.get_start() == start_vpn && area.vpn_range.get_end() == end_vpn {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .map(|i| {
+                self.areas[i].unmap(&mut self.page_table);
+                self.areas.remove(i);
+                0
+            })
+            .unwrap_or(-1)
     }
     /// 检查self的area的range范围和_start _end之间的关系
     pub fn is_overlap(&self, _start: VirtPageNum, _end: VirtPageNum) -> bool {

@@ -43,11 +43,11 @@ mod process;
 
 use fs::*;
 use process::*;
-use crate::task::TASK_MANAGER;
+//use crate::task::TASK_MANAGER;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     //🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
-    TASK_MANAGER.count_syscall(syscall_id);
+    //TASK_MANAGER.count_syscall(syscall_id); ch5以后的没有了count
     //🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴
     
     match syscall_id {
