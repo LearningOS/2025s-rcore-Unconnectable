@@ -127,11 +127,11 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    let start_va:VirtAddr = start.into();
+    let start_va: VirtAddr = start.into();
     if !start_va.aligned() {
         return -1;
     }
-    if (port & (!0x7)) != 0 || (port & 0x7) == 0 {
+    if (port & !0x7) != 0 || (port & 0x7) == 0 {
         return -1;
     }
     let end_va: VirtAddr = (start + len).into();
@@ -142,7 +142,11 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
             debug!("kernel: mmap: overlap");
             return -1;
         }
-        task.inner_exclusive_access().memory_set.mmap(start_vpn, end_vpn, MapPermission::from_bits_truncate((port as u8) << 1) | MapPermission::U);
+        task.inner_exclusive_access().memory_set.mmap(
+            start_vpn,
+            end_vpn,
+            MapPermission::from_bits_truncate((port as u8) << 1) | MapPermission::U
+        );
         0
     } else {
         -1
@@ -176,9 +180,23 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_spawn NOT IMPLEMENTED", current_task().unwrap().pid.0);
-    -1
+    let current_task = current_task().unwrap();
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if path.is_empty() {
+        //检查无效的文件名
+        return -1;
+    }
+    if let Some(elf_data) = get_app_data_by_name(path.as_str()) {
+        let new_task = current_task.spawn(elf_data);
+        let new_pid = new_task.pid.0;
+        add_task(new_task);
+        new_pid as isize
+    } else {
+        -1
+    }
 }
 
 // YOUR JOB: Set task priority.
